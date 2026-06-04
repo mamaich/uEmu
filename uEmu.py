@@ -6,7 +6,7 @@
 #  Copyright (c) 2017 Alexander Hude. All rights reserved.
 #
 
-UEMU_USE_AS_SCRIPT      = True    # Set to `False` if you want to load uEmu automatically as IDA Plugin
+UEMU_USE_AS_SCRIPT      = False    # Set to `False` if you want to load uEmu automatically as IDA Plugin
 
 # === Import
 
@@ -1702,7 +1702,7 @@ class uEmuPlugin(plugin_t, UI_Hooks):
         uemu_log("Unload plugin " + self.plugin_name)
 
     def get_context_columns(self):
-        return 2
+        return 3
 
     def unload_plugin(self): # synchronous unload (internal, Main Menu)
         if self.unicornEngine.is_active():
@@ -1773,13 +1773,13 @@ class uEmuPlugin(plugin_t, UI_Hooks):
 
     def register_menu_actions(self):
         self.MENU_ITEMS.append(UEMU_HELPERS.MenuItem(self.plugin_name + ":start",             self.emu_start,             "Start",                      "Start emulation",           None,                   True    ))
-        self.MENU_ITEMS.append(UEMU_HELPERS.MenuItem(self.plugin_name + ":run",               self.emu_run,               "Run",                        "Run",                       None,                   True    ))
-        self.MENU_ITEMS.append(UEMU_HELPERS.MenuItem(self.plugin_name + ":step",              self.emu_step,              "Step",                       "Step to next instruction",  "SHIFT+CTRL+ALT+S",     True    ))
+        self.MENU_ITEMS.append(UEMU_HELPERS.MenuItem(self.plugin_name + ":run",               self.emu_run,               "Run",                        "Run",                       "F9",                   True    ))
+        self.MENU_ITEMS.append(UEMU_HELPERS.MenuItem(self.plugin_name + ":step",              self.emu_step,              "Step",                       "Step to next instruction",  "F7",		     True    ))
         self.MENU_ITEMS.append(UEMU_HELPERS.MenuItem(self.plugin_name + ":stop",              self.emu_stop,              "Stop",                       "Stop emulation",            None,                   True    ))
         self.MENU_ITEMS.append(UEMU_HELPERS.MenuItem(self.plugin_name + ":reset",             self.emu_reset,             "Reset",                      "Reset emulation",           None,                   True    ))
         self.MENU_ITEMS.append(UEMU_HELPERS.MenuItem("-",                                     self.do_nothing,            "",                           None,                        None,                   True    ))
         self.add_custom_menu()
-        self.MENU_ITEMS.append(UEMU_HELPERS.MenuItem(self.plugin_name + ":jmp_pc",            self.jump_to_pc,            "Jump to PC",                 "Jump to PC",                "SHIFT+CTRL+ALT+J",     True    ))
+        self.MENU_ITEMS.append(UEMU_HELPERS.MenuItem(self.plugin_name + ":jmp_pc",            self.jump_to_pc,            "Jump to PC",                 "Jump to PC",                "F6",		     True    ))
         self.MENU_ITEMS.append(UEMU_HELPERS.MenuItem(self.plugin_name + ":set_pc",            self.set_pc,                "Set PC",                     "Set PC",                    None,                   True    ))
         self.MENU_ITEMS.append(UEMU_HELPERS.MenuItem(self.plugin_name + ":cng_cpu",           self.change_cpu_context,    "Change CPU Context",         "Change CPU Context",        None,                   True    ))
         self.MENU_ITEMS.append(UEMU_HELPERS.MenuItem("-",                                     self.do_nothing,            "",                           None,                        None,                   True    ))
