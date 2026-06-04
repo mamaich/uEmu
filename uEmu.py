@@ -1543,7 +1543,7 @@ class uEmuUnicornEngine(object):
                         else:
                             self.step(self.emuStepCount - 1)
                         return 1
-                    else:
+                    elif not self._stopped_at_temp_bpt():
                         uemu_log("Breakpoint reached at 0x%X : %s" % (self.pc, UEMU_HELPERS.trim_spaces(IDAAPI_GetDisasm(self.pc, 0))))
 
                 if not self.emuRunning:
@@ -1589,7 +1589,7 @@ class uEmuUnicornEngine(object):
                         else:
                             self.step(self.emuStepCount - 1)
                         return 1
-                    else:
+                    elif not self._stopped_at_temp_bpt():
                         uemu_log("Breakpoint reached at 0x%X : %s" % (self.pc, UEMU_HELPERS.trim_spaces(IDAAPI_GetDisasm(self.pc, 0))))
 
                 if not self.emuRunning:
@@ -1624,8 +1624,10 @@ class uEmuUnicornEngine(object):
     def _remove_temp_bpt(self):
         if self.temp_bpt_ea != BADADDR:
             IDAAPI_DelBpt(self.temp_bpt_ea)
-            uemu_log("Step over: removed temporary breakpoint at 0x%X" % self.temp_bpt_ea)
             self.temp_bpt_ea = BADADDR
+
+    def _stopped_at_temp_bpt(self):
+        return self.temp_bpt_ea != BADADDR and self.pc == self.temp_bpt_ea
 
     def step_over(self):
         # next_head() returns the address of the next IDA "item", which on
@@ -1653,7 +1655,6 @@ class uEmuUnicornEngine(object):
                 uemu_log("Step over: failed to add temporary breakpoint at 0x%X" % next_pc)
                 return False
             self.temp_bpt_ea = next_pc
-            uemu_log("Step over: temporary breakpoint at 0x%X" % next_pc)
 
         self.step(self.kStepCount_Run)
         return True
