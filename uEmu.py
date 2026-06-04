@@ -34,6 +34,8 @@ if IDA_SDK_VERSION >= 700:
     IDAAPI_GetBptQty    = get_bpt_qty
     IDAAPI_GetBptEA     = get_bpt_ea
     IDAAPI_GetBptAttr   = get_bpt_attr
+    IDAAPI_AddBpt       = add_bpt
+    IDAAPI_DelBpt       = del_bpt
     IDAAPI_SegStart     = get_segm_start
     IDAAPI_SegEnd       = get_segm_end
     IDAAPI_GetBytes     = get_bytes
@@ -59,6 +61,8 @@ else:
     IDAAPI_GetBptQty    = GetBptQty
     IDAAPI_GetBptEA     = GetBptEA
     IDAAPI_GetBptAttr   = GetBptAttr
+    IDAAPI_AddBpt       = AddBpt
+    IDAAPI_DelBpt       = DelBpt
     IDAAPI_SegStart     = SegStart
     IDAAPI_SegEnd       = SegEnd
     IDAAPI_GetBytes     = get_many_bytes
@@ -857,11 +861,13 @@ class uEmuControlView(PluginForm):
         btnStart = QPushButton("Start")
         btnRun = QPushButton("Run")
         btnStep = QPushButton("Step")
+        btnStepOver = QPushButton("Step Over")
         btnStop = QPushButton("Stop")
 
         btnStart.clicked.connect(self.OnEmuStart)
         btnRun.clicked.connect(self.OnEmuRun)
         btnStep.clicked.connect(self.OnEmuStep)
+        btnStepOver.clicked.connect(self.OnEmuStepOver)
         btnStop.clicked.connect(self.OnEmuStop)
 
         hbox = QHBoxLayout()
@@ -869,6 +875,7 @@ class uEmuControlView(PluginForm):
         hbox.addWidget(btnStart)
         hbox.addWidget(btnRun)
         hbox.addWidget(btnStep)
+        hbox.addWidget(btnStepOver)
         hbox.addWidget(btnStop)
 
         self.parent.setLayout(hbox)
@@ -881,6 +888,9 @@ class uEmuControlView(PluginForm):
 
     def OnEmuStep(self, code=0):
         self.owner.emu_step()
+
+    def OnEmuStepOver(self, code=0):
+        self.owner.emu_step_over()
 
     def OnEmuStop(self, code=0):
         self.owner.emu_stop()
@@ -1105,6 +1115,8 @@ class uEmuUnicornEngine(object):
 
     fix_context     = None
     extended        = False
+
+    temp_bpt_ea     = BADADDR
 
     def __init__(self, owner):
         super(uEmuUnicornEngine, self).__init__()
@@ -1545,6 +1557,7 @@ class uEmuUnicornEngine(object):
                 if self.owner.follow_pc():
                     self.jump_to_pc()
 
+                self._remove_temp_bpt()
                 self.emuStepCount = 1
                 self.emuRunning = False
                 return 1
@@ -1562,6 +1575,7 @@ class uEmuUnicornEngine(object):
                         if self.owner.follow_pc():
                             self.jump_to_pc()
 
+                        self._remove_temp_bpt()
                         self.emuRunning = False
                         return 1
 
@@ -1589,6 +1603,7 @@ class uEmuUnicornEngine(object):
                 if self.owner.follow_pc():
                     self.jump_to_pc()
 
+                self._remove_temp_bpt()
                 self.emuStepCount = 1
                 self.emuRunning = False
                 return 1
@@ -1605,6 +1620,43 @@ class uEmuUnicornEngine(object):
 
     def run(self):
         self.step(self.kStepCount_Run)
+
+    def _remove_temp_bpt(self):
+        if self.temp_bpt_ea != BADADDR:
+            IDAAPI_DelBpt(self.temp_bpt_ea)
+            uemu_log("Step over: removed temporary breakpoint at 0x%X" % self.temp_bpt_ea)
+            self.temp_bpt_ea = BADADDR
+
+    def step_over(self):
+        # next_head() returns the address of the next IDA "item", which on
+        # AArch64 already accounts for macro-instructions IDA glued together
+        # from several physical instructions (e.g. ADRP+ADD pair shown as a
+        # single MOV X0, #imm). So a temp breakpoint on next_head correctly
+        # skips the whole macro.
+        next_pc = IDAAPI_NextHead(self.pc)
+        if next_pc == BADADDR or next_pc <= self.pc:
+            uemu_log("Step over: unable to determine next instruction at 0x%X" % self.pc)
+            return False
+
+        # If a breakpoint already exists at next_pc, leave it alone: do not
+        # add a second one and do not remove the user's bpt afterwards.
+        existing_bpt = False
+        for idx in range(IDAAPI_GetBptQty()):
+            if IDAAPI_GetBptEA(idx) == next_pc:
+                existing_bpt = True
+                break
+
+        if existing_bpt:
+            self.temp_bpt_ea = BADADDR
+        else:
+            if not IDAAPI_AddBpt(next_pc):
+                uemu_log("Step over: failed to add temporary breakpoint at 0x%X" % next_pc)
+                return False
+            self.temp_bpt_ea = next_pc
+            uemu_log("Step over: temporary breakpoint at 0x%X" % next_pc)
+
+        self.step(self.kStepCount_Run)
+        return True
 
     def interrupt(self):
         IDAAPI_SetColor(self.pc, CIC_ITEM, UEMU_CONFIG.IDAViewColor_Reset)
@@ -1775,6 +1827,7 @@ class uEmuPlugin(plugin_t, UI_Hooks):
         self.MENU_ITEMS.append(UEMU_HELPERS.MenuItem(self.plugin_name + ":start",             self.emu_start,             "Start",                      "Start emulation",           None,                   True    ))
         self.MENU_ITEMS.append(UEMU_HELPERS.MenuItem(self.plugin_name + ":run",               self.emu_run,               "Run",                        "Run",                       "F9",                   True    ))
         self.MENU_ITEMS.append(UEMU_HELPERS.MenuItem(self.plugin_name + ":step",              self.emu_step,              "Step",                       "Step to next instruction",  "F7",		     True    ))
+        self.MENU_ITEMS.append(UEMU_HELPERS.MenuItem(self.plugin_name + ":step_over",         self.emu_step_over,         "Step Over",                  "Step over next instruction","F8",                   True    ))
         self.MENU_ITEMS.append(UEMU_HELPERS.MenuItem(self.plugin_name + ":stop",              self.emu_stop,              "Stop",                       "Stop emulation",            None,                   True    ))
         self.MENU_ITEMS.append(UEMU_HELPERS.MenuItem(self.plugin_name + ":reset",             self.emu_reset,             "Reset",                      "Reset emulation",           None,                   True    ))
         self.MENU_ITEMS.append(UEMU_HELPERS.MenuItem("-",                                     self.do_nothing,            "",                           None,                        None,                   True    ))
@@ -1917,6 +1970,17 @@ class uEmuPlugin(plugin_t, UI_Hooks):
                 count = 1
 
         self.unicornEngine.step(count)
+
+    def emu_step_over(self):
+        if not self.unicornEngine.is_active():
+            uemu_log("Emulator is not active")
+            return
+
+        if self.unicornEngine.is_running():
+            uemu_log("Emulator is running")
+            return
+
+        self.unicornEngine.step_over()
 
     def emu_stop(self):
         if not self.unicornEngine.is_active():
